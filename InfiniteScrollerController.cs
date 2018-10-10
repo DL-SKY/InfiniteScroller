@@ -9,8 +9,11 @@
 [!] Необходимо задать расстояние между элементами списка "spacing"
 [!] Необходимо задать количество элементов виртуального списка "countVirtualItems"
 [!] Если "isInitializeUponStarting = FALSE", то необходимо проинициализировать компонент извне, вызвав метод "Initialize()"
+
+[?] Флаг "isInitializeInCoroutine" отвечает за поштучное создание элементов/карточек списка через кадр при инициализации
 */
 
+using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.UI;
@@ -30,6 +33,7 @@ public class InfiniteScrollerController : MonoBehaviour
     #region Variables   
     [Header("Initialization")]
     public bool isInitializeUponStarting = true;                    //Флаг инициализации при создании объекта
+    public bool isInitializeInCoroutine = false;                    //Флаг инициализации в корутине, элементы/карточки создаются по 1 через кадр
     public ScrollerDirection scrollDirection = ScrollerDirection.Vertical;  //Направление движения скроллера
 
     [Header("Looped list")]
@@ -128,14 +132,29 @@ public class InfiniteScrollerController : MonoBehaviour
         }
 
         ClearItems();
-        CreateAllItems(_indexFirst);
 
-        //Первичный просчет индексов видимых элементов
-        OnScrollChange(Vector2.zero);
+        //Поштучная инициализация/создание элементов через кадр
+        if (isInitializeInCoroutine)
+            StartCoroutine(InitializingCoroutine(_indexFirst));
+        //Инициализация за один кадр
+        else
+            Initializing(_indexFirst);        
+    }    
+
+    public void Clear()
+    {
+        ClearItems();
     }
     #endregion
 
     #region Private methods
+    private void Initializing(int _indexFirst)
+    {
+        CreateAllItems(_indexFirst);
+        //Первичный просчет индексов видимых элементов
+        OnScrollChange(Vector2.zero);
+    }
+
     [ContextMenu("Re-Initialize")]    
     private void Reinitialize()
     {
@@ -402,6 +421,41 @@ public class InfiniteScrollerController : MonoBehaviour
         }
 
         ScrollToPosition(normalizePosition);
+    }
+    #endregion
+
+    #region Coroutines
+    private IEnumerator InitializingCoroutine(int _indexFirst)
+    {
+        //Определяем размеры элемента списка
+        var instanceRect = itemPrefab.GetComponent<RectTransform>();
+        height = (int)instanceRect.rect.height;
+        width = (int)instanceRect.rect.width;
+
+        //Создаем видимые элементы списка + 2 (дополнительно сверху и снизу)
+        int countViews = 0;
+        if (scrollDirection == ScrollerDirection.Vertical)
+            countViews = Mathf.CeilToInt(scroller.viewport.rect.height / (height + spacing));
+        else if (scrollDirection == ScrollerDirection.Horizontal)
+            countViews = Mathf.CeilToInt(scroller.viewport.rect.width / (width + spacing));
+
+        //Устанавливаем размер области Content
+        if (scrollDirection == ScrollerDirection.Vertical)
+            content.sizeDelta = new Vector2(content.sizeDelta.x, countVirtualItems * (height + spacing) - spacing);
+        else if (scrollDirection == ScrollerDirection.Horizontal)
+            content.sizeDelta = new Vector2(countVirtualItems * (width + spacing) - spacing, content.sizeDelta.y);
+
+        for (int i = -1; i <= countViews; i++)
+        {
+            CreateOneItem(i);
+            yield return null;
+        }        
+
+        //Скроллим к нужному элементу
+        ScrollToElement(_indexFirst, countVirtualItems);
+
+        //Первичный просчет индексов видимых элементов
+        OnScrollChange(Vector2.zero);
     }
     #endregion
 }
