@@ -31,7 +31,9 @@ public class InfiniteScrollerController : MonoBehaviour
     #endregion
 
     #region Variables   
-    [Header("Initialization")]
+    public bool IsInit { get; private set; }
+
+    [Header("Initialization")]    
     public bool isInitializeUponStarting = true;                    //Флаг инициализации при создании объекта
     public bool isInitializeInCoroutine = false;                    //Флаг инициализации в корутине, элементы/карточки создаются по 1 через кадр
     public ScrollerDirection scrollDirection = ScrollerDirection.Vertical;  //Направление движения скроллера
@@ -63,6 +65,7 @@ public class InfiniteScrollerController : MonoBehaviour
     #region Unity methods
     private void Awake()
     {
+        IsInit = false;
         scroller = GetComponent<ScrollRect>();
     }
 
@@ -92,6 +95,20 @@ public class InfiniteScrollerController : MonoBehaviour
     #region Public methods    
     public void Initialize(int _indexFirst = 0)
     {
+        //Проверка ранее пройденной верификации
+        if (!isVerified)
+        {
+            isVerified = Verification();
+
+            try
+            {
+                scroller.onValueChanged.AddListener(OnScrollChange);
+                content = scroller.content;
+            }
+            catch { }
+        }
+
+        //Повторная проверка
         if (!isVerified)
         {
             Debug.LogWarning("[InfiniteScroller] Verification failed. The initialization will not be performed.");
@@ -139,7 +156,24 @@ public class InfiniteScrollerController : MonoBehaviour
         //Инициализация за один кадр
         else
             Initializing(_indexFirst);        
-    }    
+    }
+
+    public Vector2 GetPositionElement(int _index)
+    {
+        var result = new Vector2();
+
+        //Определяем размеры элемента списка
+        var instanceRect = itemPrefab.GetComponent<RectTransform>();
+        height = (int)instanceRect.rect.height;
+        width = (int)instanceRect.rect.width;
+
+        if (scrollDirection == ScrollerDirection.Vertical)
+            result = new Vector2(0.0f, (-_index * (height + spacing)));
+        else if (scrollDirection == ScrollerDirection.Horizontal)
+            result = new Vector2((_index * (width + spacing)), 0.0f);
+
+        return result;
+    }
 
     public void Clear()
     {
@@ -153,6 +187,8 @@ public class InfiniteScrollerController : MonoBehaviour
         CreateAllItems(_indexFirst);
         //Первичный просчет индексов видимых элементов
         OnScrollChange(Vector2.zero);
+
+        IsInit = true;
     }
 
     [ContextMenu("Re-Initialize")]    
@@ -169,6 +205,7 @@ public class InfiniteScrollerController : MonoBehaviour
 
         result = itemPrefab != null;
         result = result && scroller != null;
+
         if (result)
             result = result && scroller.viewport.transform.childCount > 0;
         else
@@ -200,7 +237,7 @@ public class InfiniteScrollerController : MonoBehaviour
         for (int i = 0; i < items.Count; i++)
         {
             if (items[i])
-                Destroy(items[i].gameObject);
+                DestroyImmediate(items[i].gameObject);
         }
 
         items.Clear();
@@ -456,6 +493,8 @@ public class InfiniteScrollerController : MonoBehaviour
 
         //Первичный просчет индексов видимых элементов
         OnScrollChange(Vector2.zero);
+
+        IsInit = true;
     }
     #endregion
 }
